@@ -45,4 +45,4 @@ test:$(ALL_PROGRAMS)
 	@for p in $(ALL_PROGRAMS) ; do printf "%-20s: %s\n" "$$p"  "$$(./$$p)" ; done
 
 clean:
-	-rm -f $(ALL_PROGRAMS)
+	-rm -f $(ALL_PROGRAMS) *.o
