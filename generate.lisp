@@ -99,6 +99,33 @@ License: AGPL3")
          :prepend-kernel t
          :error-handler t)
 
+  #+clisp (ext::saveinitmem
+           (merge-pathnames program-name release-directory  nil)
+           :executable t
+           :norc t
+           :quiet t
+           :verbose t
+           :script t
+           :documentation (format nil "~A version ~A~%~A~%" *program-name* *version*  *copyright*)
+           :start-package (find-package "COMMON-LISP-USER")
+           ;; locked-packages
+           ;; :keep-global-handlers
+           :init-function (coerce `(lambda ()
+                                     (handler-case
+                                         (progn
+                                           (load ',init-file :if-does-not-exist nil)
+                                           (funcall ,main-function  ext:*args*))
+                                       (error (err)
+                                         (finish-output *standard-output*)
+                                         (finish-output *trace-output*)
+                                         (format *error-output* "~%~A~%" err)
+                                         (finish-output *error-output*)
+                                         (ext:exit 1)))
+                                     (finish-output *standard-output*)
+                                     (finish-output *trace-output*)
+                                     (ext:exit 0))
+                                  'function))
+
   #+ecl (progn
           (asdf:make-build system-name
                            :type :program
@@ -137,7 +164,7 @@ License: AGPL3")
                                    :epilogue-code `(funcall ',main-function (si::command-args)))
   #+ecl (quit)
 
-  #-(or ccl ecl)
+  #-(or ccl ecl clisp)
   (error "~S is not implemented yet for ~A"
          'generate-program
          (lisp-implementation-type)))
