@@ -74,7 +74,7 @@ License: AGPL3")
                          &key release-directory init-file system-name)
   (declare (ignorable release-directory init-file system-name))
   (finish-output)
-  
+
   ;; This doesn't return.
   #+ccl (ccl::save-application
          (merge-pathnames program-name release-directory  nil)
@@ -107,7 +107,7 @@ License: AGPL3")
                            :epilogue-code `(progn
                                              (handler-case
                                                  (progn
-                                                   
+
                                                    (load ',init-file :if-does-not-exist nil)
                                                    (funcall ',main-function
                                                             (rest (si::command-args))))
@@ -128,14 +128,14 @@ License: AGPL3")
             :name (string-downcase system-name)
             :type nil)
            (merge-pathnames program-name release-directory nil)))
-  
+
   #+(and nil ecl) (c:build-program (merge-pathnames program-name release-directory nil)
                                    :lisp-files '()
                                    :ld-flags '()
                                    :prologue-code ""
                                    :epilogue-code `(funcall ',main-function (si::command-args)))
   #+ecl (quit)
-  
+
   #-(or ccl ecl)
   (error "~S is not implemented yet for ~A"
          'generate-program
