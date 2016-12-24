@@ -78,21 +78,22 @@ License: AGPL3")
   ;; This doesn't return.
   #+ccl (ccl::save-application
          (merge-pathnames program-name release-directory  nil)
-         :toplevel-function (lambda ()
-                              (handler-case
-                                  (progn
-                                    (load init-file :if-does-not-exist nil)
-                                    (funcall main-function
-                                             (rest ccl:*command-line-argument-list*)))
-                                (error (err)
-                                  (finish-output *standard-output*)
-                                  (finish-output *trace-output*)
-                                  (format *error-output* "~%~A~%" err)
-                                  (finish-output *error-output*)
-                                  (ccl:quit 1)))
-                              (finish-output *standard-output*)
-                              (finish-output *trace-output*)
-                              (ccl:quit 0))
+         :toplevel-function (coerce `(lambda ()
+                                       (handler-case
+                                           (progn
+                                             (load ',init-file :if-does-not-exist nil)
+                                             (funcall ,main-function
+                                                      (rest ccl:*command-line-argument-list*)))
+                                         (error (err)
+                                           (finish-output *standard-output*)
+                                           (finish-output *trace-output*)
+                                           (format *error-output* "~%~A~%" err)
+                                           (finish-output *error-output*)
+                                           (ccl:quit 1)))
+                                       (finish-output *standard-output*)
+                                       (finish-output *trace-output*)
+                                       (ccl:quit 0))
+                                    'function)
          :init-file init-file
          :mode #o755
          :prepend-kernel t
@@ -109,7 +110,7 @@ License: AGPL3")
                                                  (progn
 
                                                    (load ',init-file :if-does-not-exist nil)
-                                                   (funcall ',main-function
+                                                   (funcall ,main-function
                                                             (rest (si::command-args))))
                                                (error (err)
                                                  (finish-output *standard-output*)
@@ -143,7 +144,7 @@ License: AGPL3")
 
 
 (generate-program *program-name*
-                  'cl-user::main
+                  '(find-symbol "MAIN" "Hello World")
                   :system-name *system-name*
                   :release-directory *release-directory*
                   :init-file *init-file*)

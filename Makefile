@@ -2,7 +2,8 @@ ALL_PROGRAMS= \
 	hw-c \
 	hw-pascal \
 	hw-lisp-ccl \
-	hw-lisp-ecl
+	hw-lisp-ecl \
+	hw-lisp-clisp-fas
 
 all:$(ALL_PROGRAMS)
 
@@ -15,34 +16,37 @@ LINE="//----------------------------------------------------------------------"
 .PHONY: all clean test
 
 hw-c:hw.c
-	@printf "%s\n" "$(LINE)"
 	@printf "// Generating Executable from %s source:  %s\n" "C" $@
-	@printf "%s\n" "$(LINE)"
-	$(CC) -o hw-c hw.c
+	@$(CC) -o hw-c hw.c > hw-c.log 2>&1
 
 hw-pascal:hw.pas
-	@printf "%s\n" "$(LINE)"
 	@printf "// Generating Executable from %s source:  %s\n" "Pascal" $@
-	@printf "%s\n" "$(LINE)"
-	$(FPC) -ohw-pascal hw.pas
+	@$(FPC) -ohw-pascal hw.pas > hw-pascal.log 2>&1
 
 hw-lisp-ccl:generate.lisp hw.asd hw.lisp
-	@printf "%s\n" "$(LINE)"
 	@printf "// Generating Executable from %s source:  %s\n" "Lisp" $@
-	@printf "%s\n" "$(LINE)"
-	$(CCL) -n < generate.lisp
-	-mv hw hw-lisp-ccl
+	@$(CCL) -n < generate.lisp > hw-lisp-ccl.log 2>&1
+	-@mv hw hw-lisp-ccl
 
 hw-lisp-ecl:generate.lisp hw.asd hw.lisp
-	@printf "%s\n" "$(LINE)"
 	@printf "// Generating Executable from %s source:  %s\n" "Lisp" $@
-	@printf "%s\n" "$(LINE)"
-	-rm -f ~/.cache/common-lisp/ecl-16.0.0-unknown-macosx-x64/Users/pjb/src/hw/hw
-	$(ECL) -norc < generate.lisp
-	-mv hw hw-lisp-ecl
+	-@rm -f ~/.cache/common-lisp/ecl-16.0.0-unknown-macosx-x64/Users/pjb/src/hw/hw
+	@$(ECL) -norc < generate.lisp > hw-lisp-ecl.log 2>&1
+	-@mv hw hw-lisp-ecl
+
+hw-lisp-clisp-fas: hw.fas
+	@printf "// Generating Executable from %s source:  %s\n" "Lisp" $@
+	@( echo '#!/usr/local/bin/clisp -ansi -q -E utf-8' ;\
+	  cat $^ ;\
+	  echo '(|Hello World|::main ext:*args*)' ) > $@
+	@chmod 755 $@
+
+hw.fas:hw.lisp
+	@printf "// Compiling:  %s\n" $@
+	@clisp -ansi -q -E utf-8 -norc -c $^ -o $@ > hw-lisp-clisp-fas.log 2>&1
 
 test:$(ALL_PROGRAMS)
 	@for p in $(ALL_PROGRAMS) ; do printf "%-20s: %s\n" "$$p"  "$$(./$$p)" ; done
 
 clean:
-	-rm -f $(ALL_PROGRAMS) *.o
+	-rm -f $(ALL_PROGRAMS) *.o *.fas *.lib *.log
