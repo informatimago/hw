@@ -83,7 +83,7 @@ License: AGPL3")
                                            (progn
                                              (load ',init-file :if-does-not-exist nil)
                                              (funcall ,main-function
-                                                      (rest ccl:*command-line-argument-list*)))
+                                                      #|(rest ccl:*command-line-argument-list*)|#))
                                          (error (err)
                                            (finish-output *standard-output*)
                                            (finish-output *trace-output*)
@@ -114,7 +114,7 @@ License: AGPL3")
                                      (handler-case
                                          (progn
                                            (load ',init-file :if-does-not-exist nil)
-                                           (funcall ,main-function  ext:*args*))
+                                           (funcall ,main-function  #|ext:*args*|#))
                                        (error (err)
                                          (finish-output *standard-output*)
                                          (finish-output *trace-output*)
@@ -138,7 +138,7 @@ License: AGPL3")
 
                                                    (load ',init-file :if-does-not-exist nil)
                                                    (funcall ,main-function
-                                                            (rest (si::command-args))))
+                                                            #|(rest (si::command-args)|#)))
                                                (error (err)
                                                  (finish-output *standard-output*)
                                                  (finish-output *trace-output*)
@@ -161,7 +161,7 @@ License: AGPL3")
                                    :lisp-files '()
                                    :ld-flags '()
                                    :prologue-code ""
-                                   :epilogue-code `(funcall ',main-function (si::command-args)))
+                                   :epilogue-code `(funcall ',main-function #|(si::command-args)|#))
   #+ecl (quit)
 
   #-(or ccl ecl clisp)
@@ -171,7 +171,7 @@ License: AGPL3")
 
 
 (generate-program *program-name*
-                  '(find-symbol "MAIN" "Hello World")
+                  '(find-symbol "HW" "HELLO-WORLD")
                   :system-name *system-name*
                   :release-directory *release-directory*
                   :init-file *init-file*)
