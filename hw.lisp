@@ -1,9 +1,7 @@
-(defpackage "Hello World"
-  (:use "COMMON-LISP"))
-(in-package "Hello World")
+(defpackage "HELLO-WORLD"
+  (:use "COMMON-LISP")
+  (:export "HW"))
+(in-package "HELLO-WORLD")
 
-(defun main (&optional arguments)
-  (declare (ignorable arguments))
-  (when arguments
-    (format t "Arguments are: ~{~%    ~A~}~%" arguments))
+(defun hw ()
   (write-line "Hello World!"))
