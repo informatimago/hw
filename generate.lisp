@@ -138,7 +138,7 @@ License: AGPL3")
 
                                                    (load ',init-file :if-does-not-exist nil)
                                                    (funcall ,main-function
-                                                            #|(rest (si::command-args)|#)))
+                                                            #|(rest (si::command-args))|#))
                                                (error (err)
                                                  (finish-output *standard-output*)
                                                  (finish-output *trace-output*)

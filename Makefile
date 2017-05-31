@@ -36,16 +36,16 @@ hw-lisp-ecl:generate.lisp hw.asd hw.lisp
 	@$(ECL) -norc < generate.lisp > hw-lisp-ecl.log 2>&1
 	-@mv hw hw-lisp-ecl
 
-hw-lisp-clisp: hw.lisp
+hw-lisp-clisp:generate.lisp hw.lisp
 	@printf "// Generating Executable from %s source: %s\n" "Lisp" $@
 	@$(CLISP) -norc < generate.lisp > hw-lisp-clisp.log 2>&1
 	-@mv hw hw-lisp-clisp
 
-hw-lisp-clisp-fas: hw.fas
+hw-lisp-clisp-fas:Makefile hw.fas
 	@printf "// Generating Executable from %s source: %s\n" "Lisp" $@
 	@( echo '#!/usr/local/bin/clisp -ansi -q -E utf-8' ;\
-	  cat $^ ;\
-	  echo '(|Hello World|::main ext:*args*)' ) > $@
+	  cat hw.fas ;\
+	  echo '(hello-world:hw #|ext:*args*|#)' ) > $@
 	@chmod 755 $@
 
 hw.fas:hw.lisp
