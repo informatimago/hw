@@ -6,5 +6,4 @@
   (declare (ignorable arguments))
   (when arguments
     (format t "Arguments are: ~{~%    ~A~}~%" arguments))
-  (princ "Hello World!")
-  (terpri))
+  (write-line "Hello World!"))
