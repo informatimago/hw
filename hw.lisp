@@ -4,4 +4,6 @@
 (in-package "HELLO-WORLD")
 
 (defun hw ()
-  (write-line "Hello World!"))
+  (write-line "Hello World!")
+  (finish-output)
+  (values))
