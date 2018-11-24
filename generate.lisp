@@ -64,13 +64,6 @@ The main function must be a (lambda (&rest command-line-arguments) …).")
   (error "~S is not implemented yet on ~A, please provide a patch!"
          what (lisp-implementation-type)))
 
-(defun argv ()
-  #+ccl   ccl:*command-line-argument-list*
-  #+clisp (cons (elt (ext:argv) 0) ext:*args*)
-  #+ecl   (si::command-args)
-  #+sbcl  sb-ext:*posix-argv*
-  #-(or ccl clisp ecl sbcl) (not-implemented-yet 'exit))
-
 #-(and)
 (defun program-path ()
   (let* ((argv  (ext:argv))
@@ -88,6 +81,13 @@ The main function must be a (lambda (&rest command-line-arguments) …).")
       (t
        *default-program-name*))))
 
+(defun argv ()
+  #+ccl   ccl:*command-line-argument-list*
+  #+clisp (cons (elt (ext:argv) 0) ext:*args*)
+  #+ecl   (si::command-args)
+  #+sbcl  sb-ext:*posix-argv*
+  #-(or ccl clisp ecl sbcl) (not-implemented-yet 'exit))
+
 (defun exit (status)
   #+ccl   (ccl:quit status)
   #+clisp (ext:quit status)
@@ -96,21 +96,24 @@ The main function must be a (lambda (&rest command-line-arguments) …).")
   #-(or ccl clisp ecl sbcl) (not-implemented-yet 'exit))
 
 (defun make-toplevel-function (main-function-name init-file)
-  (lambda ()
-    (handler-case
-        (progn
-          (when init-file
-            (load init-file :if-does-not-exist nil))
-          (apply (read-from-string main-function-name) (argv)))
-      (error (err)
-        (finish-output *standard-output*)
-        (finish-output *trace-output*)
-        (format *error-output* "~%~A~%" err)
-        (finish-output *error-output*)
-        (exit 1)))
-    (finish-output *standard-output*)
-    (finish-output *trace-output*)
-    (exit 0)))
+  (let ((form `(lambda ()
+                 (handler-case
+                     (progn
+                       ,@(when init-file
+                           `((load ,init-file :if-does-not-exist nil)))
+                       (apply (read-from-string ,main-function-name)
+                              #+ecl (si::command-args) #-ecl (argv)))
+                   (error (err)
+                     (finish-output *standard-output*)
+                     (finish-output *trace-output*)
+                     (format *error-output* "~%~A~%" err)
+                     (finish-output *error-output*)
+                     #+ecl (ext:quit 1) #-ecl (exit 1)))
+                 (finish-output *standard-output*)
+                 (finish-output *trace-output*)
+                 #+ecl (ext:quit 0) #-ecl (exit 0))))
+    #+ecl (list form)
+    #-ecl (coerce form 'function)))
 
 (defun system-cl-source-files (system)
   (let ((system (asdf:find-system system)))
@@ -193,16 +196,18 @@ The main function must be a (lambda (&rest command-line-arguments) …).")
             #-(and) (load "hw.asd")
             #-(and) (asdf:oos 'asdf:program-op system-name)
             (asdf:make-build system-name
-                                     :type :program
-                                     :monolithic t
-                                     :ld-flags '()
-                                     :prologue-code ""
-                                     :epilogue-code `(funcall ,(make-toplevel-function main-function init-file)))
-            #-(and) (c:build-program (merge-pathnames program-name release-directory nil)
+                             :type :program
+                             :monolithic t
+                             :ld-flags '()
+                             :prologue-code ""
+                             :epilogue-code #-(and) '(progn (print 'hello) (finish-output)) ; doesn't work either.
+                                            (make-toplevel-function main-function init-file))
+            #-(and)
+            (c:build-program (merge-pathnames program-name release-directory nil)
                              :lisp-files (system-object-files system-name)
                              :ld-flags '()
                              :prologue-code ""
-                             :epilogue-code `(funcall  (make-toplevel-function ',main-function ',init-file))))
+                             :epilogue-code (make-toplevel-function main-function init-file)))
 
           (rename-file
            (make-pathname
