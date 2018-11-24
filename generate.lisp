@@ -1,180 +1,222 @@
 (in-package "COMMON-LISP-USER")
 
+;; Remove used package from CL-USER to avoid conflicts.
+;; Note: this doesn't remove directly imported symbols.
+(mapc (lambda (package) (unuse-package package "COMMON-LISP-USER"))
+      (set-difference
+       (copy-seq (package-use-list "COMMON-LISP-USER"))
+       (delete nil (list ;; A list of all the "CL" packages possible:
+                         (find-package "COMMON-LISP")))))
+
+#+ecl (require 'cmp)
+
+;;; --------------------------------------------------------------------
+;;; Configuration
+;;;
+(defparameter *program-name*      "hw" "Generated executable name (when implementation allows it)")
+(defparameter *version*           "1.0.0")
+(defparameter *copyright*         "Copyright Pascal J. Bourguignon 2015 - 2018
+License: AGPL3")
+(defparameter *system-name*       "hw" "The main ASDF system name (when implementation needs it.")
+(defparameter *system-list*        '() "List of  ASDF systems that must be loaded before *SYSTEM-NAME*.")
+(defparameter *main-function*     "HELLO-WORLD:HW" "This string will be read to get the name of the main function.
+The main function must be a (lambda (&rest command-line-arguments) …).")
+(defparameter *init-file*         "~/.hw.lisp" "Can be NIL or a namestring to the rc file for this program.")
+(defparameter *source-directory*  (or *load-pathname* (truename #P"./")))
+(defparameter *release-directory* *source-directory* #|#P"HOME:bin;"|# "Where the executable will be stored." )
+(defparameter *root-directory*    *source-directory*)
+(defparameter *asdf-directories*  (mapcar (lambda (path) (make-pathname :name nil :type nil :version nil :defaults path))
+                                          (append (directory (merge-pathnames "**/*.asd" *root-directory* nil))
+                                                  (list *source-directory*))))
+
 ;;; --------------------------------------------------------------------
 ;;; Load quicklisp.
 ;;;
 
-(format t "~%;;; Loading quicklisp.~%")
-(finish-output)
+(defun say (format-control &rest arguments)
+  (format t "~&;;; ~?~%" format-control arguments)
+  (finish-output))
+
+(say "Loading quicklisp.")
 (load #P"~/quicklisp/setup.lisp")
 (setf quicklisp-client:*quickload-verbose* t)
 
+(defun configure-asdf-directories (directories &key append)
+  #-adsf3 (setf asdf:*central-registry*
+                (remove-duplicates (if append
+                                       (append directories asdf:*central-registry*)
+                                       directories)
+                                   :test (function equalp)))
+  #+asdf3 (asdf:initialize-source-registry
+           `(:source-registry
+             :ignore-inherited-configuration
+             ,@(mapcar (lambda (dir) `(:directory ,dir))
+                       (remove-duplicates directories :test (function equalp)))
+             ,@(when append `(:default-registry)))))
+
+(configure-asdf-directories *asdf-directories*)
+
 ;;; --------------------------------------------------------------------
-;;; HOME
+;;; Utilities
 ;;;
 
-#-(and)
-(unless (logical-pathname-translations "HOME")
-  (setf (logical-pathname-translations "HOME")
-        (list (list "HOME:**;*.*"
-                    (merge-pathnames "**/*.*"
-                                     (user-homedir-pathname))))))
+(defun not-implemented-yet (what)
+  (error "~S is not implemented yet on ~A, please provide a patch!"
+         what (lisp-implementation-type)))
 
-;;; --------------------------------------------------------------------
-;;; Load the program.
-;;;
-(defparameter *source-directory*  (or *load-pathname* (truename #P"./")))
-(defparameter *program-name*      "hw" "Generated executable name (when implementation allows it)")
-(defparameter *system-name*       "hw" "ASDF system name (when implementation needs it.")
-(defparameter *init-file*         "~/.hw.lisp")
-(defparameter *release-directory* *source-directory* #|#P"HOME:bin;"|#)
-(defparameter *version*           "1.0.0")
-(defparameter *copyright*
-  "Copyright Pascal J. Bourguignon 2015 - 2016
-License: AGPL3")
+(defun argv ()
+  #+ccl   ccl:*command-line-argument-list*
+  #+clisp ext:*args*
+  #+ecl   (si::command-args)
+  #+sbcl  sb-ext:*posix-argv*
+  #-(or ccl clisp ecl sbcl) (not-implemented-yet 'exit))
 
-#-(and)(defparameter *root-directory* *source-directory*)
-#-(and)(setf asdf:*central-registry*
-             (union (delete-duplicates (mapcar (lambda (path)
-                                                 (make-pathname :name nil :type nil :version nil
-                                                                :defaults path))
-                                               (directory (merge-pathnames "**/*.asd" *root-directory*)))
-                                       :test (function equalp))
-                    asdf:*central-registry*
-                    :test (function equal)))
+(defun exit (status)
+  #+ccl   (ccl:quit status)
+  #+clisp (ext:quit status)
+  #+ecl   (ext:quit status)
+  #+sbcl  (sb-ext:exit :code status)
+  #-(or ccl clisp ecl sbcl) (not-implemented-yet 'exit))
 
-(pushnew *source-directory* asdf:*central-registry*
-         :test (function equal))
+(defun make-toplevel-function (main-function-name init-file)
+  (lambda ()
+    (handler-case
+        (progn
+          (when init-file
+            (load init-file :if-does-not-exist nil))
+          (apply (read-from-string main-function-name) (argv)))
+      (error (err)
+        (finish-output *standard-output*)
+        (finish-output *trace-output*)
+        (format *error-output* "~%~A~%" err)
+        (finish-output *error-output*)
+        (exit 1)))
+    (finish-output *standard-output*)
+    (finish-output *trace-output*)
+    (exit 0)))
 
-#-ecl (ql:quickload *system-name*)
+(defun system-cl-source-files (system)
+  (let ((system (asdf:find-system system)))
+    (remove-duplicates
+     (append
+      (mapcar (function asdf:component-pathname)
+              (remove-if-not (lambda (component) (typep component 'asdf:cl-source-file))
+                             (asdf:component-children system)))
+      (mapcan (function system-cl-source-files)
+              (delete-duplicates
+               (mapcan (lambda (depend) (copy-list (funcall depend system)))
+                       '(asdf:system-defsystem-depends-on
+                         asdf:system-depends-on
+                         asdf:system-weakly-depends-on))
+               :test (function equal))))
+     :test (function equal))))
 
-(format t "Generating ~A~%" (merge-pathnames *program-name* *release-directory*))
-
-
-#-(and)
-(defun copy-files (files dest-dir)
-  (ensure-directories-exist (make-pathname :name "test"
-                                           :type "test"
-                                           :defaults dest-dir))
-  (dolist (file (directory files))
-    (let ((dest-file (make-pathname
-                      :name (pathname-name file)
-                      :type (pathname-type file)
-                      :defaults dest-dir)))
-      (format t "Copying ~A~%" dest-file)
-      (com.informatimago.common-lisp.cesarum.file:copy-file
-       file dest-file
-       :element-type '(unsigned-byte 8)
-       :if-exists :supersede))))
-
-
+(defun system-object-files (system)
+  (let ((system (asdf:find-system system)))
+    (remove-duplicates
+     (append
+      (mapcan (lambda (component) (copy-list (asdf:output-files 'asdf:compile-op component)))
+              (asdf:component-children system))
+      (mapcan (function system-object-files)
+              (delete-duplicates
+               (mapcan (lambda (depend) (copy-list (funcall depend system)))
+                       '(asdf:system-defsystem-depends-on
+                         asdf:system-depends-on
+                         asdf:system-weakly-depends-on))
+               :test (function equal))))
+     :test (function equal))))
 
 
 (defun generate-program (program-name main-function
-                         &key release-directory init-file system-name)
-  (declare (ignorable release-directory init-file system-name))
-  (finish-output)
+                         &key release-directory init-file system-name system-list
+                           version copyright source-directory)
+  (declare (ignorable release-directory init-file
+                      system-name system-list
+                      version copyright source-directory))
 
-  ;; This doesn't return.
-  #+ccl (ccl::save-application
-         (merge-pathnames program-name release-directory  nil)
-         :toplevel-function (coerce `(lambda ()
-                                       (handler-case
-                                           (progn
-                                             (load ',init-file :if-does-not-exist nil)
-                                             (funcall ,main-function
-                                                      #|(rest ccl:*command-line-argument-list*)|#))
-                                         (error (err)
-                                           (finish-output *standard-output*)
-                                           (finish-output *trace-output*)
-                                           (format *error-output* "~%~A~%" err)
-                                           (finish-output *error-output*)
-                                           (ccl:quit 1)))
-                                       (finish-output *standard-output*)
-                                       (finish-output *trace-output*)
-                                       (ccl:quit 0))
-                                    'function)
-         :init-file init-file
-         :mode #o755
-         :prepend-kernel t
-         :error-handler t)
+  (when system-list
+    (say "Load systems ~A" system-list)
+    (ql:quickload system-list))
+  #-ecl
+  (progn
+    (say "Load system ~A" system-name)
+    (ql:quickload system-name))
 
-  #+clisp (ext::saveinitmem
+  (say "Generating program ~A" (merge-pathnames program-name release-directory))
+
+  #+ccl (progn
+          ;; This doesn't return.
+          (ccl::save-application
            (merge-pathnames program-name release-directory  nil)
-           :executable t
-           :norc t
-           :quiet t
-           :verbose t
-           :script t
-           :documentation (format nil "~A version ~A~%~A~%" *program-name* *version*  *copyright*)
-           :start-package (find-package "COMMON-LISP-USER")
-           ;; locked-packages
-           ;; :keep-global-handlers
-           :init-function (coerce `(lambda ()
-                                     (handler-case
-                                         (progn
-                                           (load ',init-file :if-does-not-exist nil)
-                                           (funcall ,main-function  #|ext:*args*|#))
-                                       (error (err)
-                                         (finish-output *standard-output*)
-                                         (finish-output *trace-output*)
-                                         (format *error-output* "~%~A~%" err)
-                                         (finish-output *error-output*)
-                                         (ext:exit 1)))
-                                     (finish-output *standard-output*)
-                                     (finish-output *trace-output*)
-                                     (ext:exit 0))
-                                  'function))
+           :toplevel-function (make-toplevel-function main-function nil)
+           :init-file init-file
+           :mode #o755
+           :prepend-kernel t
+           :error-handler t))
+
+  #+clisp (progn
+            (ext::saveinitmem
+             (merge-pathnames program-name release-directory  nil)
+             :executable t
+             :norc t
+             :quiet t
+             :verbose t
+             :script t
+             :documentation (format nil "~A version ~A~%~A~%" program-name version copyright)
+             :start-package (find-package "COMMON-LISP-USER")
+             ;; locked-packages
+             ;; :keep-global-handlers
+             :init-function (make-toplevel-function main-function init-file))
+            (ext:quit 0))
 
   #+ecl (progn
-          (asdf:make-build system-name
-                           :type :program
-                           :monolithic t
-                           :ld-flags '()
-                           :prologue-code ""
-                           :epilogue-code `(progn
-                                             (handler-case
-                                                 (progn
+          (handler-bind
+              ((error (lambda (condition)
+                        (invoke-debugger condition))))
+            #-(and) (load "hw.asd")
+            #-(and) (asdf:oos 'asdf:program-op system-name)
+            (asdf:make-build system-name
+                                     :type :program
+                                     :monolithic t
+                                     :ld-flags '()
+                                     :prologue-code ""
+                                     :epilogue-code `(funcall ,(make-toplevel-function main-function init-file)))
+            #-(and) (c:build-program (merge-pathnames program-name release-directory nil)
+                             :lisp-files (system-object-files system-name)
+                             :ld-flags '()
+                             :prologue-code ""
+                             :epilogue-code `(funcall  (make-toplevel-function ',main-function ',init-file))))
 
-                                                   (load ',init-file :if-does-not-exist nil)
-                                                   (funcall ,main-function
-                                                            #|(rest (si::command-args))|#))
-                                               (error (err)
-                                                 (finish-output *standard-output*)
-                                                 (finish-output *trace-output*)
-                                                 (format *error-output* "~%~A~%" err)
-                                                 (finish-output *error-output*)
-                                                 (si:quit 1)))
-                                             (finish-output *standard-output*)
-                                             (finish-output *trace-output*)
-                                             (si:quit 0)))
           (rename-file
            (make-pathname
             :directory (append (pathname-directory
                                 (uiop/configuration::compute-user-cache))
-                               (rest (pathname-directory *source-directory*)))
+                               (rest (pathname-directory source-directory)))
             :name (string-downcase system-name)
             :type nil)
-           (merge-pathnames program-name release-directory nil)))
+           (merge-pathnames program-name release-directory nil))
 
-  #+(and nil ecl) (c:build-program (merge-pathnames program-name release-directory nil)
-                                   :lisp-files '()
-                                   :ld-flags '()
-                                   :prologue-code ""
-                                   :epilogue-code `(funcall ',main-function #|(si::command-args)|#))
-  #+ecl (quit)
+          (ext:quit 0))
 
-  #-(or ccl ecl clisp)
-  (error "~S is not implemented yet for ~A"
-         'generate-program
-         (lisp-implementation-type)))
+  #+sbcl (sb-ext:save-lisp-and-die "hw"
+                                   :executable t
+                                   :compression 9
+                                   :toplevel (make-toplevel-function main-function init-file))
 
+  #-(or ccl clisp ecl sbcl) (not-implemented-yet 'generate-program))
+
+;;; --------------------------------------------------------------------
+;;; generate the program
+;;;
 
 (generate-program *program-name*
-                  '(find-symbol "HW" "HELLO-WORLD")
+                  *main-function*
                   :system-name *system-name*
+                  :system-list *system-list*
                   :release-directory *release-directory*
-                  :init-file *init-file*)
-
+                  :init-file *init-file*
+                  :version *version*
+                  :copyright *copyright*
+                  :source-directory *source-directory*)
 
 ;;;; THE END ;;;;
