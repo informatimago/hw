@@ -66,10 +66,27 @@ The main function must be a (lambda (&rest command-line-arguments) …).")
 
 (defun argv ()
   #+ccl   ccl:*command-line-argument-list*
-  #+clisp ext:*args*
+  #+clisp (cons (elt (ext:argv) 0) ext:*args*)
   #+ecl   (si::command-args)
   #+sbcl  sb-ext:*posix-argv*
   #-(or ccl clisp ecl sbcl) (not-implemented-yet 'exit))
+
+#-(and)
+(defun program-path ()
+  (let* ((argv  (ext:argv))
+         (largv (length argv))
+         (args  ext:*args*)
+         (largs (length args))
+         (index (- largv largs 1))
+         (path  (and (<= 0 index largv) (elt argv index))))
+    (cond
+      (path
+       path)
+      ((and *load-truename*
+            (string/= (file-namestring *load-truename*) "script.lisp"))
+       (namestring *load-truename*))
+      (t
+       *default-program-name*))))
 
 (defun exit (status)
   #+ccl   (ccl:quit status)
