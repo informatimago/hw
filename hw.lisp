@@ -5,4 +5,5 @@
 
 (defun hw (pname &rest arguments)
   (declare (ignore pname arguments))
-  (write-line "Hello World!"))
+  (write-line "Hello World!")
+  (values))
