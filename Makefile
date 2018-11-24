@@ -42,9 +42,25 @@ hw-lisp-clisp:generate.lisp hw.lisp
 
 hw-lisp-clisp-fas:Makefile hw.fas
 	@printf "// Generating Executable from %s source: %s\n" "Lisp" $@
-	@( echo '#!/usr/local/bin/clisp -ansi -q -E utf-8' ;\
-	  cat hw.fas ;\
-	  echo '(hello-world:hw #|ext:*args*|#)' ) > $@
+	@(echo '#!/usr/local/bin/clisp -ansi -q -E utf-8' ;\
+	  cat hw.fas  ;\
+	  echo '(defun argv () (cons (elt (ext:argv) 0) ext:*args*))' ;\
+	  echo '(defun start () ' ;\
+	  echo '   (handler-case' ;\
+	  echo '       (progn' ;\
+	  echo '         (load #P"~/.hw.lisp" :if-does-not-exist nil)' ;\
+	  echo '         (apply (function hello-world:hw) (argv)))' ;\
+	  echo '     (error (err)' ;\
+	  echo '       (finish-output *standard-output*)' ;\
+	  echo '       (finish-output *trace-output*)' ;\
+	  echo '       (format *error-output* "~%~A~%" err)' ;\
+	  echo '       (finish-output *error-output*)' ;\
+	  echo '       (ext:quit 1)))' ;\
+	  echo '   (finish-output *standard-output*)' ;\
+	  echo '   (finish-output *trace-output*)' ;\
+	  echo '   (finish-output *error-output*)' ;\
+	  echo '   (ext:quit 0))' ;\
+	  echo '(start)' ) > $@
 	@chmod 755 $@
 
 hw.fas:hw.lisp
