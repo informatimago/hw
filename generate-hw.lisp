@@ -16,8 +16,8 @@
                                                   (list *source-directory*))))
 (defparameter *release-directory* *source-directory* #|#P"HOME:bin;"|# "Where the executable will be stored." )
 
-(generate-program "hw"
-                  "HELLO-WORLD:HW"
+(generate-program :program-name "hw"
+                  :main-function "HELLO-WORLD:HW"
                   :system-name "hw"
                   :system-list '()
                   :init-file "~/.hw.lisp"

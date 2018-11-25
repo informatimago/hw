@@ -159,8 +159,8 @@
       (write-string (slurp-stream output)))
     (say "   status ~S" status)))
 
-(defun generate-program (program-name main-function
-                         &key system-name system-list
+(defun generate-program (&key program-name main-function
+                           system-name system-list
                            source-directory asdf-directories release-directory
                            init-file version copyright)
   (declare (ignorable release-directory init-file
@@ -218,12 +218,12 @@
           #-(and) (asdf:oos 'asdf:program-op system-name)
 
           (funcall (runtime-function "ASDF:MAKE-BUILD") system-name
-                           :type :program
-                           :monolithic t
-                           :ld-flags '()
-                           :prologue-code ""
-                           :epilogue-code (make-toplevel-function main-function init-file)
-                           :move-here release-directory)
+                   :type :program
+                   :monolithic t
+                   :ld-flags '()
+                   :prologue-code ""
+                   :epilogue-code (make-toplevel-function main-function init-file)
+                   :move-here release-directory)
 
           #-(and) (progn (c:build-program (merge-pathnames program-name release-directory nil)
                                           :lisp-files (system-object-files system-name)
