@@ -8,57 +8,37 @@
        (delete nil (list ;; A list of all the "CL" packages possible:
                          (find-package "COMMON-LISP")))))
 
-#+ecl (require 'cmp)
-
 ;;; --------------------------------------------------------------------
-;;; Configuration
-;;;
-(defparameter *program-name*      "hw" "Generated executable name (when implementation allows it)")
-(defparameter *version*           "1.0.0")
-(defparameter *copyright*         "Copyright Pascal J. Bourguignon 2015 - 2018
-License: AGPL3")
-(defparameter *system-name*       "hw" "The main ASDF system name (when implementation needs it.")
-(defparameter *system-list*        '() "List of  ASDF systems that must be loaded before *SYSTEM-NAME*.")
-(defparameter *main-function*     "HELLO-WORLD:HW" "This string will be read to get the name of the main function.
-The main function must be a (lambda (&rest command-line-arguments) …).")
-(defparameter *init-file*         "~/.hw.lisp" "Can be NIL or a namestring to the rc file for this program.")
-(defparameter *source-directory*  (or *load-pathname* (truename #P"./")))
-(defparameter *release-directory* *source-directory* #|#P"HOME:bin;"|# "Where the executable will be stored." )
-(defparameter *root-directory*    *source-directory*)
-(defparameter *asdf-directories*  (mapcar (lambda (path) (make-pathname :name nil :type nil :version nil :defaults path))
-                                          (append (directory (merge-pathnames "**/*.asd" *root-directory* nil))
-                                                  (list *source-directory*))))
-
-;;; --------------------------------------------------------------------
-;;; Load quicklisp.
+;;; Utilities
 ;;;
 
 (defun say (format-control &rest arguments)
   (format t "~&;;; ~?~%" format-control arguments)
   (finish-output))
 
-(say "Loading quicklisp.")
-(load #P"~/quicklisp/setup.lisp")
-(setf quicklisp-client:*quickload-verbose* t)
+(defun runtime-function (name) (read-from-string name))
+(defun runtime-symbol   (name) (read-from-string name))
+(defun runtime-value    (name) (symbol-value (read-from-string name)))
+(defun (setf runtime-value) (new-value name) (setf (symbol-value (read-from-string name)) new-value))
+
+(defun load-quicklisp ()
+  (say "Loading quicklisp.")
+  (load #P"~/quicklisp/setup.lisp")
+  (setf (runtime-value "QUICKLISP-CLIENT:*QUICKLOAD-VERBOSE*") t))
 
 (defun configure-asdf-directories (directories &key append)
-  #-adsf3 (setf asdf:*central-registry*
-                (remove-duplicates (if append
-                                       (append directories asdf:*central-registry*)
-                                       directories)
-                                   :test (function equalp)))
-  #+asdf3 (asdf:initialize-source-registry
-           `(:source-registry
-             :ignore-inherited-configuration
-             ,@(mapcar (lambda (dir) `(:directory ,dir))
-                       (remove-duplicates directories :test (function equalp)))
-             ,@(when append `(:default-registry)))))
-
-(configure-asdf-directories *asdf-directories*)
-
-;;; --------------------------------------------------------------------
-;;; Utilities
-;;;
+  (if (member :asdf3 *features*)
+      (funcall (runtime-function "ASDF:INITIALIZE-SOURCE-REGISTRY")
+               `(:source-registry
+                 :ignore-inherited-configuration
+                 ,@(mapcar (lambda (dir) `(:directory ,dir))
+                           (remove-duplicates directories :test (function equalp)))
+                 ,@(when append `(:default-registry))))
+      (setf (runtime-value "ASDF:*CENTRAL-REGISTRY*")
+            (remove-duplicates (if append
+                                   (append directories (runtime-value "ASDF:*CENTRAL-REGISTRY*"))
+                                   directories)
+                               :test (function equalp)))))
 
 (defun not-implemented-yet (what)
   (error "~S is not implemented yet on ~A, please provide a patch!"
@@ -116,51 +96,95 @@ The main function must be a (lambda (&rest command-line-arguments) …).")
     #-ecl (coerce form 'function)))
 
 (defun system-cl-source-files (system)
-  (let ((system (asdf:find-system system)))
+  (let ((system (funcall (runtime-function "ASDF:FIND-SYSTEM") system)))
     (remove-duplicates
      (append
-      (mapcar (function asdf:component-pathname)
-              (remove-if-not (lambda (component) (typep component 'asdf:cl-source-file))
-                             (asdf:component-children system)))
+      (mapcar (runtime-function "ASDF:COMPONENT-PATHNAME")
+              (remove-if-not (lambda (component) (typep component (runtime-symbol "ASDF:CL-SOURCE-FILE")))
+                             (funcall (runtime-function "ASDF:COMPONENT-CHILDREN") system)))
       (mapcan (function system-cl-source-files)
               (delete-duplicates
-               (mapcan (lambda (depend) (copy-list (funcall depend system)))
-                       '(asdf:system-defsystem-depends-on
-                         asdf:system-depends-on
-                         asdf:system-weakly-depends-on))
+               (mapcan (lambda (depend) (copy-list (funcall (runtime-function depend) system)))
+                       '("ASDF:SYSTEM-DEFSYSTEM-DEPENDS-ON"
+                         "ASDF:SYSTEM-DEPENDS-ON"
+                         "ASDF:SYSTEM-WEAKLY-DEPENDS-ON"))
                :test (function equal))))
      :test (function equal))))
 
 (defun system-object-files (system)
-  (let ((system (asdf:find-system system)))
+  (let ((system (funcall (runtime-function "ASDF:FIND-SYSTEM") system)))
     (remove-duplicates
      (append
-      (mapcan (lambda (component) (copy-list (asdf:output-files 'asdf:compile-op component)))
-              (asdf:component-children system))
+      (mapcan (lambda (component) (copy-list (funcall (runtime-function "ASDF:OUTPUT-FILES")
+                                                      (runtime-symbol "ASDF:COMPILE-OP")
+                                                      component)))
+              (funcall (runtime-function "ASDF:COMPONENT-CHILDREN") system))
       (mapcan (function system-object-files)
               (delete-duplicates
-               (mapcan (lambda (depend) (copy-list (funcall depend system)))
-                       '(asdf:system-defsystem-depends-on
-                         asdf:system-depends-on
-                         asdf:system-weakly-depends-on))
+               (mapcan (lambda (depend) (copy-list (funcall (runtime-function depend) system)))
+                       '("ASDF:SYSTEM-DEFSYSTEM-DEPENDS-ON"
+                         "ASDF:SYSTEM-DEPENDS-ON"
+                         "ASDF:SYSTEM-WEAKLY-DEPENDS-ON"))
                :test (function equal))))
      :test (function equal))))
 
+(defun slurp-stream (stream)
+  (with-output-to-string (*standard-output*)
+    (loop
+      :for line := (read-line stream nil)
+      :while line
+      :do (write-line line))))
+
+#+ecl
+(defun pre-compile-with-quicklisp (program-name main-function
+                                   system-name system-list
+                                   source-directory asdf-directories release-directory
+                                   init-file version copyright)
+  (declare (ignorable program-name main-function
+                      system-name system-list
+                      source-directory asdf-directories release-directory
+                      init-file version copyright))
+  (say "Quickloading ~S" (cons system-name system-list))
+  (multiple-value-bind (output status)
+      (ext:run-program (first (argv))
+                       (list "--norc" "--load" "generate.lisp"
+                             "--eval" (prin1-to-string `(progn (require 'cmp)
+                                                               (load-quicklisp)
+                                                               (configure-asdf-directories ',asdf-directories)
+                                                               (funcall (runtime-function "QL:QUICKLOAD") ',(cons system-name system-list)))))
+                       :input nil
+                       :output :stream
+                       :wait t)
+    (unless (zerop status)
+      (write-string (slurp-stream output)))
+    (say "   status ~S" status)))
 
 (defun generate-program (program-name main-function
-                         &key release-directory init-file system-name system-list
-                           version copyright source-directory)
+                         &key system-name system-list
+                           source-directory asdf-directories release-directory
+                           init-file version copyright)
   (declare (ignorable release-directory init-file
                       system-name system-list
                       version copyright source-directory))
 
-  (when system-list
-    (say "Load systems ~A" system-list)
-    (ql:quickload system-list))
-  #-ecl
-  (progn
-    (say "Load system ~A" system-name)
-    (ql:quickload system-name))
+  #+ecl (pre-compile-with-quicklisp program-name main-function
+                                    system-name system-list
+                                    source-directory asdf-directories release-directory
+                                    init-file version copyright)
+
+  #-ecl (load-quicklisp)
+  #+ecl (progn (require 'cmp)
+               (say "Requiring ASDF")
+               (require 'asdf))
+
+  (configure-asdf-directories asdf-directories)
+
+  #-ecl (progn
+          (say "Quickloading system ~A" system-name)
+          (funcall (runtime-function "QL:QUICKLOAD") system-name)
+          (when system-list
+            (say "Quickloading systems ~A" system-list)
+            (funcall (runtime-function "QL:QUICKLOAD") system-list)))
 
   (say "Generating program ~A" (merge-pathnames program-name release-directory))
 
@@ -190,34 +214,31 @@ The main function must be a (lambda (&rest command-line-arguments) …).")
             (ext:quit 0))
 
   #+ecl (progn
-          (handler-bind
-              ((error (lambda (condition)
-                        (invoke-debugger condition))))
-            #-(and) (load "hw.asd")
-            #-(and) (asdf:oos 'asdf:program-op system-name)
-            (asdf:make-build system-name
-                             :type :program
-                             :monolithic t
-                             :ld-flags '()
-                             :prologue-code ""
-                             :epilogue-code #-(and) '(progn (print 'hello) (finish-output)) ; doesn't work either.
-                                            (make-toplevel-function main-function init-file))
-            #-(and)
-            (c:build-program (merge-pathnames program-name release-directory nil)
-                             :lisp-files (system-object-files system-name)
-                             :ld-flags '()
-                             :prologue-code ""
-                             :epilogue-code (make-toplevel-function main-function init-file)))
+          #-(and) (load "hw.asd")
+          #-(and) (asdf:oos 'asdf:program-op system-name)
 
-          (rename-file
-           (make-pathname
-            :directory (append (pathname-directory
-                                (uiop/configuration::compute-user-cache))
-                               (rest (pathname-directory source-directory)))
-            :name (string-downcase system-name)
-            :type nil)
-           (merge-pathnames program-name release-directory nil))
+          (funcall (runtime-function "ASDF:MAKE-BUILD") system-name
+                           :type :program
+                           :monolithic t
+                           :ld-flags '()
+                           :prologue-code ""
+                           :epilogue-code (make-toplevel-function main-function init-file)
+                           :move-here release-directory)
 
+          #-(and) (progn (c:build-program (merge-pathnames program-name release-directory nil)
+                                          :lisp-files (system-object-files system-name)
+                                          :ld-flags '()
+                                          :prologue-code ""
+                                          :epilogue-code (make-toplevel-function main-function init-file))
+
+                         (rename-file
+                          (make-pathname
+                           :directory (append (pathname-directory
+                                               (uiop/configuration::compute-user-cache))
+                                              (rest (pathname-directory source-directory)))
+                           :name (string-downcase system-name)
+                           :type nil)
+                          (merge-pathnames program-name release-directory nil)))
           (ext:quit 0))
 
   #+sbcl (sb-ext:save-lisp-and-die "hw"
@@ -226,19 +247,5 @@ The main function must be a (lambda (&rest command-line-arguments) …).")
                                    :toplevel (make-toplevel-function main-function init-file))
 
   #-(or ccl clisp ecl sbcl) (not-implemented-yet 'generate-program))
-
-;;; --------------------------------------------------------------------
-;;; generate the program
-;;;
-
-(generate-program *program-name*
-                  *main-function*
-                  :system-name *system-name*
-                  :system-list *system-list*
-                  :release-directory *release-directory*
-                  :init-file *init-file*
-                  :version *version*
-                  :copyright *copyright*
-                  :source-directory *source-directory*)
 
 ;;;; THE END ;;;;
