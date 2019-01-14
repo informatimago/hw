@@ -241,7 +241,7 @@
                           (merge-pathnames program-name release-directory nil)))
           (ext:quit 0))
 
-  #+sbcl (sb-ext:save-lisp-and-die "hw"
+  #+sbcl (sb-ext:save-lisp-and-die program-name
                                    :executable t
                                    :compression 9
                                    :toplevel (make-toplevel-function main-function init-file))
