@@ -1,0 +1,21 @@
+(defpackage "PROGRAM"
+  (:use "COMMON-LISP")
+  (:export "START"))
+(in-package "PROGRAM")
+(defun argv () (cons (elt (ext:argv) 0) ext:*args*))
+(defun start (main) 
+   (handler-case
+       (progn
+         (load (pathname "~/.hw.lisp") :if-does-not-exist nil)
+         (apply main (argv)))
+     (error (err)
+       (finish-output *standard-output*)
+       (finish-output *trace-output*)
+       (format *error-output* "~%~A~%" err)
+       (finish-output *error-output*)
+       (ext:quit 1)))
+   (finish-output *standard-output*)
+   (finish-output *trace-output*)
+   (finish-output *error-output*)
+   (ext:quit 0))
+(start (read-from-string "HELLO-WORLD:MAIN"))
