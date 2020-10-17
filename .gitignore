@@ -3,3 +3,5 @@
 *.fasl
 *.sse2f
 *.o
+*.hi
+*.fas
