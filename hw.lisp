@@ -1,9 +1,14 @@
 (defpackage "HELLO-WORLD"
   (:use "COMMON-LISP")
-  (:export "HW"))
+  (:export "HW" "MAIN"))
 (in-package "HELLO-WORLD")
 
-(defun hw (pname &rest arguments)
-  (declare (ignore pname arguments))
-  (write-line "Hello World!")
+(defun hw (&optional (out *standard-output*))
+  (format out "~&Hello, World!~%")
+  (finish-output out)
   (values))
+
+(defun main (pname &rest arguments)
+  (declare (ignore pname arguments))
+  (hw))
+

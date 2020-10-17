@@ -10,19 +10,20 @@
 ;;; generate the program
 ;;;
 
-(defparameter *source-directory*  (or *load-pathname* (truename #P"./")))
+(defparameter *source-directory*  (make-pathname :name nil :type nil :version nil
+                                                 :defaults (or *load-pathname* (truename (first (directory #P"./*.lisp"))))))
 (defparameter *asdf-directories*  (mapcar (lambda (path) (make-pathname :name nil :type nil :version nil :defaults path))
                                           (append (directory (merge-pathnames "**/*.asd" *source-directory* nil))
                                                   (list *source-directory*))))
 (defparameter *release-directory* *source-directory* #|#P"HOME:bin;"|# "Where the executable will be stored." )
 
 (generate-program :program-name "hw"
-                  :main-function "HELLO-WORLD:HW"
+                  :main-function "HELLO-WORLD:MAIN"
                   :system-name "hw"
                   :system-list '()
                   :init-file "~/.hw.lisp"
                   :version "1.0.0"
-                  :copyright (format nil "Copyright Pascal J. Bourguignon 2015 - 2018~%License: AGPL3")
+                  :copyright (format nil "Copyright Pascal J. Bourguignon 2015 - 2020~%License: AGPL3")
                   :source-directory  *source-directory*
                   :asdf-directories  *asdf-directories*
                   :release-directory *release-directory*)
