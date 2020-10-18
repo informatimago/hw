@@ -9,6 +9,7 @@ various programming languages.
 Usage:
 
     make all   # to compile them.
+
     make test  # to run them.
 
 They're all licensed under the AGPL-3, cf. the LICENSE file.
